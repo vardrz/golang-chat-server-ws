@@ -1,8 +1,10 @@
 package handlers
 
 import (
+	"bytes"
 	"chat-server/models"
 	"chat-server/services"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -111,6 +113,45 @@ func (h *WebSocketHandler) HandleWebSocket(c *gin.Context) {
 		}
 		h.db.Create(&message)
 
+		var senderUser models.User
+		var recipientUser models.User
+        h.db.First(&senderUser, userID)
+        h.db.First(&recipientUser, msg.ToID)
+
+		fmt.Println("akan send notif ke: " + recipientUser.Nickname)
+		fmt.Println("notif dari: " + senderUser.Nickname)
+
+        // Send notification via HTTP request
+        notifPayload := map[string]string{
+            "topic":   recipientUser.Nickname,
+            "title":   "Pesan Baru",
+            "content": fmt.Sprintf("%s %s: %s", senderUser.First_name, senderUser.Last_name, msg.Content),
+        }
+        
+        jsonData, err := json.Marshal(notifPayload)
+        if err != nil {
+            fmt.Println("Error marshaling notification payload:", err)
+        } else {
+            // Create HTTP client and request with authorization header
+            client := &http.Client{}
+            req, err := http.NewRequest("POST", "http://localhost:5000/api/notif", bytes.NewBuffer(jsonData))
+            if err != nil {
+                fmt.Println("Error creating notification request:", err)
+            } else {
+                // Add authorization header with the original token
+                req.Header.Set("Content-Type", "application/json")
+                req.Header.Set("Authorization", "Bearer "+token_catch)
+                
+                // Send the request
+                resp, err := client.Do(req)
+                if err != nil {
+                    fmt.Println("Error sending notification:", err)
+                } else {
+                    defer resp.Body.Close()
+                    fmt.Println("Notification sent, status:", resp.Status)
+                }
+            }
+        }
 		// Send message to recipient if online
 		var fullMessage models.Message
         h.db.Preload("From").First(&fullMessage, message.ID)
