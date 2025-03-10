@@ -88,7 +88,7 @@ func (h *WebSocketHandler) HandleWebSocket(c *gin.Context) {
 	mutex.Unlock()
 	// Load message history
 	var messages []models.Message
-	h.db.Where("from_id = ? OR to_id = ?", userID, userID).Order("created_at asc").Limit(50).Find(&messages)
+	h.db.Where("from_id = ? OR to_id = ?", userID, userID).Order("created_at asc").Find(&messages)
 	// Send message history to client
 	conn.WriteJSON(gin.H{
 		"type": "history",
@@ -132,24 +132,17 @@ func (h *WebSocketHandler) HandleWebSocket(c *gin.Context) {
         if err != nil {
             fmt.Println("Error marshaling notification payload:", err)
         } else {
-            // Create HTTP client and request with authorization header
-            client := &http.Client{}
-            req, err := http.NewRequest("POST", "http://localhost:5000/api/notif", bytes.NewBuffer(jsonData))
+            resp, err := http.Post(
+                "http://localhost:5000/api/notif",
+                "application/json",
+                bytes.NewBuffer(jsonData),
+            )
+            
             if err != nil {
-                fmt.Println("Error creating notification request:", err)
+                fmt.Println("Error sending notification:", err)
             } else {
-                // Add authorization header with the original token
-                req.Header.Set("Content-Type", "application/json")
-                req.Header.Set("Authorization", "Bearer "+token_catch)
-                
-                // Send the request
-                resp, err := client.Do(req)
-                if err != nil {
-                    fmt.Println("Error sending notification:", err)
-                } else {
-                    defer resp.Body.Close()
-                    fmt.Println("Notification sent, status:", resp.Status)
-                }
+                defer resp.Body.Close()
+                fmt.Println("Notification sent, status:", resp.Status)
             }
         }
 		// Send message to recipient if online
